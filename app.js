@@ -1,7 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id);
 let live=false,session=null,running=false,rows=[],epoch=0,timer=null,pending=Promise.resolve(),stage='before',preset='spin',playIndex=0,startTime=0;
-let accessCode='';
 const apiBase=(window.MECHANICA_CONFIG?.apiBase||'').replace(/\/$/,'');
 function apiPath(path){return apiBase?apiBase+'/'+path:path;}
 const palette={motor:'#37e4e4',bit:'#ff66ad',grid:'#263446',text:'#9aa9bb'};
@@ -16,7 +15,7 @@ function show(r){$('scene').src=r.image;$('motor-value').textContent=Math.round(
 function plot(canvasId,times,series){const canvas=$(canvasId),rect=canvas.getBoundingClientRect();if(rect.width<5)return;const dpr=window.devicePixelRatio||1;canvas.width=Math.round(rect.width*dpr);canvas.height=Math.round(rect.height*dpr);const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);const w=rect.width,h=rect.height,L=55,R=18,T=27,B=32;let vals=series.flatMap(s=>s.values),lo=Math.min(0,...vals),hi=Math.max(100,...vals);const range=hi-lo;lo-=range*.05;hi+=range*.08;const t0=times[0]||0,t1=Math.max(t0+.1,times[times.length-1]||2);const X=t=>L+(t-t0)/(t1-t0)*(w-L-R),Y=v=>T+(hi-v)/(hi-lo)*(h-T-B);ctx.font='10px monospace';ctx.fillStyle=palette.text;ctx.fillText('rpm',L,13);for(let i=0;i<4;i++){const v=lo+(hi-lo)*i/3;ctx.strokeStyle=palette.grid;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(L,Y(v));ctx.lineTo(w-R,Y(v));ctx.stroke();ctx.fillText(Math.round(v),0,Y(v)+3);}for(let i=0;i<5;i++){let t=t0+(t1-t0)*i/4;ctx.fillText(t.toFixed(1)+' s',X(t)-15,h-8);}for(const s of series){ctx.strokeStyle=s.color;ctx.lineWidth=2.2;ctx.setLineDash(s.dash?[7,4]:[]);ctx.beginPath();s.values.forEach((v,i)=>{i?ctx.lineTo(X(times[i]),Y(v)):ctx.moveTo(X(times[i]),Y(v))});ctx.stroke();ctx.setLineDash([]);}}
 function drawSpeed(){if(!rows.length)return;plot('speed-chart',rows.map(r=>r.t),[{color:palette.motor,values:rows.map(r=>r.spindle_rpm)},{color:palette.bit,dash:true,values:rows.map(r=>r.bit_rpm)}]);}
 function forecast(){const q=window.MECHANICA_DEMO?.learning?.[0];if(!q)return;plot('forecast-chart',q.times,[{color:palette.motor,values:q.actual.map(r=>r[1])},{color:palette.bit,dash:true,values:q[stage].map(r=>r[1])}]);$('forecast-note').textContent=stage==='before'?'Before interaction, Agent predicts that the bit keeps rotating under load.':'After the full recorded probe session, the forecast captures the interruption and recovery of bit rotation. This selected example does not establish generalization.';}
-async function request(body){const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),15000);try{const response=await fetch(apiPath('api/live'),{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json',...(accessCode?{'Authorization':'Bearer '+accessCode}:{})},body:JSON.stringify(body),signal:abort.signal});let result;try{result=await response.json()}catch{throw Error('The server returned an unexpected response. Stop the old server with Ctrl+C and restart launch.sh.');}if(!response.ok){const e=Error(result.error||`Server request failed (${response.status}).`);e.status=response.status;throw e;}session=result.session;return result;}catch(e){if(e.name==='AbortError')throw Error('The simulator did not respond within 15 seconds. Check the server terminal.');throw e;}finally{clearTimeout(timeout)}}
+async function request(body){const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),15000);try{const response=await fetch(apiPath('api/live'),{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:abort.signal});let result;try{result=await response.json()}catch{throw Error('The server returned an unexpected response. Stop the old server with Ctrl+C and restart launch.sh.');}if(!response.ok){const e=Error(result.error||`Server request failed (${response.status}).`);e.status=response.status;throw e;}session=result.session;return result;}catch(e){if(e.name==='AbortError')throw Error('The simulator did not respond within 15 seconds. Check the server terminal.');if(e instanceof TypeError)throw Error('Could not connect to the live simulator. The host may need to restart the tunnel and publish its new address.');throw e;}finally{clearTimeout(timeout)}}
 function pause(){running=false;clearTimeout(timer);epoch++;$('run').textContent=live?'START SIMULATION':'REPLAY SCENE';}
 function applyPreset(name,time){const base={trigger:.7,load:0,direction:1,gear:2,clutch:true};if(name==='spin'){base.trigger=time<1.5?.7:0;}if(name==='load'){base.trigger=1;base.load=time<.7?0:time<1.7?.8:0;if(time>=2.3)base.trigger=0;}if(name==='reverse'){base.trigger=time<2.3?.7:0;base.direction=time<1?1:-1;}return base;}
 let guide=null;
@@ -32,16 +31,6 @@ async function init(){
  document.querySelector('.trace').addEventListener('toggle',drawSpeed);$('probe-details').addEventListener('toggle',forecast);
  for(const id of ['before','after'])$(id).addEventListener('click',()=>{stage=id;for(const other of ['before','after']){$(other).classList.toggle('selected',other===id);$(other).setAttribute('aria-pressed',String(other===id));}forecast();});
  window.addEventListener('resize',()=>{drawSpeed();forecast();});document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
- $('live-access').addEventListener('submit',async event=>{
-  event.preventDefault();$('connect-live').disabled=true;accessCode=$('access-code').value.trim();
-  try{
-   const result=await request({});live=true;session=result.session;rows=[];show(result);
-   $('live-access').hidden=true;$('access-code').value='';$('error').hidden=true;
-   for(const id of ['trigger','load','direction','gear','clutch','release','reset','run'])$(id).disabled=false;document.querySelectorAll('[data-preset]').forEach(b=>b.disabled=false);
-   $('run').textContent='START SIMULATION';$('mode').textContent='LIVE / SERVER SIMULATION';
-   $('connection-note').textContent='Connected. Start the simulation and change the controls while it runs.';
-  }catch(e){accessCode='';error(e.message);}finally{$('connect-live').disabled=false;}
- });
  labels();
  try{
   if(apiBase&&!/^https:\/\/[^/]+$/.test(apiBase))throw Error('The configured simulator endpoint must be an HTTPS origin.');
@@ -51,13 +40,7 @@ async function init(){
    if(response.ok){
     const status=await response.json();
     if(![2,3].includes(status.version))throw Error('This is an old server. Restart launch.sh and refresh.');
-    if(status.requiresAccessCode){
-     $('mode').textContent='LIVE SIMULATOR / ACCESS CODE REQUIRED';
-     $('connection-note').textContent='The live simulator is online. Enter your demo access code to operate it.';
-     $('live-access').hidden=false;for(const id of ['trigger','load','direction','gear','clutch','release','reset','run'])$(id).disabled=true;document.querySelectorAll('[data-preset]').forEach(b=>b.disabled=true);
-     if(window.MECHANICA_SCENES)show(window.MECHANICA_SCENES.spin[0]);
-     return;
-    }
+    if(status.requiresAccessCode)throw Error('The simulator is still running the old invitation-only version. The host needs to restart start_live.sh.');
     live=status.mode==='server-simulator'&&status.scene;
    }else if(apiBase)throw Error('The live simulator endpoint is unavailable. Check the running tunnel.');
   }

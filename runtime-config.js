@@ -1,1 +1,1 @@
-window.MECHANICA_CONFIG = {"apiBase": "https://deposits-leeds-university-activity.trycloudflare.com"};
+window.MECHANICA_CONFIG = {"apiBase": "https://binary-upload-tender-trucks.trycloudflare.com"};
