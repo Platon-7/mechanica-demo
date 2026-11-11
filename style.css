@@ -83,23 +83,28 @@ body{background-image:radial-gradient(ellipse at 85% 0%,#12314150,transparent 38
  .immersive .visual{max-width:none}
 }
 
-/* Opening section only. Let the headline use the available desktop width. */
+/* A single centered opening composition, independent of the workbench width. */
+.hero-interactive{display:block;min-height:0;padding:48px 0 84px}
+.hero-composition{width:100%;max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:32px;align-items:center}
 .hero-copy{min-width:0}
-.hero-pitch{max-width:48ch;text-wrap:pretty}
-@media(min-width:1000px){
- .hero-interactive{grid-template-columns:minmax(0,1fr) clamp(280px,28vw,440px);gap:clamp(28px,4vw,88px);min-height:440px;padding:42px 0 70px}
- .hero-interactive h1{font-size:clamp(40px,4.2vw,70px);white-space:nowrap;letter-spacing:-1.8px}
- .hero-pitch{max-width:48ch;margin:24px 0 28px;font-size:20px}
- .hero-instrument{width:100%;height:340px}
- .hero-links{gap:24px}
-}
-@media(min-width:651px) and (max-width:999px){
- .hero-interactive{grid-template-columns:minmax(0,1fr) 240px;gap:20px}
- .hero-interactive h1{font-size:clamp(30px,4.2vw,42px);letter-spacing:-1px;white-space:nowrap}
- .hero-instrument{height:300px;transform:scale(.7)}
+.hero-interactive h1{font-size:clamp(40px,4.2vw,64px);white-space:nowrap;letter-spacing:-1.8px}
+.hero-pitch{font-size:19px;max-width:45ch;margin:24px 0 28px;text-wrap:pretty}
+.hero-links{gap:22px}
+.hero-instrument{width:400px;height:400px;justify-self:center}
+.hero-bottom{max-width:1180px;margin:0 auto}
+@media(min-width:651px) and (max-width:1100px){
+ .hero-composition{grid-template-columns:minmax(0,1fr) 300px;gap:20px}
+ .hero-interactive h1{font-size:clamp(30px,4vw,44px);letter-spacing:-1px}
+ .hero-instrument{width:360px;height:340px;transform:scale(.82)}
  .hero-pitch{font-size:17px}
 }
-@media(max-width:650px){
- .hero-interactive h1{white-space:normal;text-wrap:balance;font-size:clamp(32px,7.5vw,42px)}
- .hero-pitch{max-width:42ch}
+@media(max-width:760px){
+ .hero-interactive{padding:36px 0 65px}
+ .hero-composition{grid-template-columns:1fr;gap:12px;text-align:center}
+ .hero-copy .eyebrow{font-size:11px}
+ .hero-interactive h1{white-space:normal;text-wrap:balance;font-size:clamp(32px,6vw,46px)}
+ .hero-pitch{max-width:42ch;margin:20px auto 24px;font-size:16px}
+ .hero-links{justify-content:center}
+ .hero-instrument{width:min(360px,100%);height:280px;transform:scale(.8);margin:0;transform-origin:center}
+ .hero-bottom{font-size:7px;letter-spacing:.4px}
 }
