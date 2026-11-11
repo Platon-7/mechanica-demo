@@ -14,3 +14,5 @@ body{background-image:radial-gradient(ellipse at 85% 0%,#12314150,transparent 38
 
 /* Lab affiliation in the site accent color. */
 .brand .affiliation,footer p strong{color:var(--pink)}
+
+#live-access{border-top:1px solid var(--line);margin-top:18px;padding-top:4px}#access-code{width:100%;border:1px solid #445567;background:#101a28;padding:12px;color:var(--ink);font:12px monospace}#connect-live{width:100%;margin-top:10px;border-color:var(--cyan);color:var(--cyan)}

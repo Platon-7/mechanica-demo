@@ -1,6 +1,9 @@
 'use strict';
 const $=id=>document.getElementById(id);
 let live=false,session=null,running=false,rows=[],epoch=0,timer=null,pending=Promise.resolve(),stage='before',preset='spin',playIndex=0,startTime=0;
+let accessCode='';
+const apiBase=(window.MECHANICA_CONFIG?.apiBase||'').replace(/\/$/,'');
+function apiPath(path){return apiBase?apiBase+'/'+path:path;}
 const palette={motor:'#37e4e4',bit:'#ff66ad',grid:'#263446',text:'#9aa9bb'};
 function error(message){$('error').hidden=false;$('error').textContent=message;}
 window.addEventListener('error',e=>error('The workbench encountered an error. Reload once. If it persists, share this message\n'+e.message));
@@ -13,11 +16,11 @@ function show(r){$('scene').src=r.image;$('motor-value').textContent=Math.round(
 function plot(canvasId,times,series){const canvas=$(canvasId),rect=canvas.getBoundingClientRect();if(rect.width<5)return;const dpr=window.devicePixelRatio||1;canvas.width=Math.round(rect.width*dpr);canvas.height=Math.round(rect.height*dpr);const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);const w=rect.width,h=rect.height,L=55,R=18,T=27,B=32;let vals=series.flatMap(s=>s.values),lo=Math.min(0,...vals),hi=Math.max(100,...vals);const range=hi-lo;lo-=range*.05;hi+=range*.08;const t0=times[0]||0,t1=Math.max(t0+.1,times[times.length-1]||2);const X=t=>L+(t-t0)/(t1-t0)*(w-L-R),Y=v=>T+(hi-v)/(hi-lo)*(h-T-B);ctx.font='10px monospace';ctx.fillStyle=palette.text;ctx.fillText('rpm',L,13);for(let i=0;i<4;i++){const v=lo+(hi-lo)*i/3;ctx.strokeStyle=palette.grid;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(L,Y(v));ctx.lineTo(w-R,Y(v));ctx.stroke();ctx.fillText(Math.round(v),0,Y(v)+3);}for(let i=0;i<5;i++){let t=t0+(t1-t0)*i/4;ctx.fillText(t.toFixed(1)+' s',X(t)-15,h-8);}for(const s of series){ctx.strokeStyle=s.color;ctx.lineWidth=2.2;ctx.setLineDash(s.dash?[7,4]:[]);ctx.beginPath();s.values.forEach((v,i)=>{i?ctx.lineTo(X(times[i]),Y(v)):ctx.moveTo(X(times[i]),Y(v))});ctx.stroke();ctx.setLineDash([]);}}
 function drawSpeed(){if(!rows.length)return;plot('speed-chart',rows.map(r=>r.t),[{color:palette.motor,values:rows.map(r=>r.spindle_rpm)},{color:palette.bit,dash:true,values:rows.map(r=>r.bit_rpm)}]);}
 function forecast(){const q=window.MECHANICA_DEMO?.learning?.[0];if(!q)return;plot('forecast-chart',q.times,[{color:palette.motor,values:q.actual.map(r=>r[1])},{color:palette.bit,dash:true,values:q[stage].map(r=>r[1])}]);$('forecast-note').textContent=stage==='before'?'Before interaction, Agent predicts that the bit keeps rotating under load.':'After the full recorded probe session, the forecast captures the interruption and recovery of bit rotation. This selected example does not establish generalization.';}
-async function request(body){const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),15000);try{const response=await fetch('api/live',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:abort.signal});let result;try{result=await response.json()}catch{throw Error('The server returned an unexpected response. Stop the old server with Ctrl+C and restart launch.sh.');}if(!response.ok)throw Error(result.error||`Server request failed (${response.status}).`);session=result.session;return result;}catch(e){if(e.name==='AbortError')throw Error('The simulator did not respond within 15 seconds. Check the server terminal.');throw e;}finally{clearTimeout(timeout)}}
+async function request(body){const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),15000);try{const response=await fetch(apiPath('api/live'),{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json',...(accessCode?{'Authorization':'Bearer '+accessCode}:{})},body:JSON.stringify(body),signal:abort.signal});let result;try{result=await response.json()}catch{throw Error('The server returned an unexpected response. Stop the old server with Ctrl+C and restart launch.sh.');}if(!response.ok){const e=Error(result.error||`Server request failed (${response.status}).`);e.status=response.status;throw e;}session=result.session;return result;}catch(e){if(e.name==='AbortError')throw Error('The simulator did not respond within 15 seconds. Check the server terminal.');throw e;}finally{clearTimeout(timeout)}}
 function pause(){running=false;clearTimeout(timer);epoch++;$('run').textContent=live?'START SIMULATION':'REPLAY SCENE';}
 function applyPreset(name,time){const base={trigger:.7,load:0,direction:1,gear:2,clutch:true};if(name==='spin'){base.trigger=time<1.5?.7:0;}if(name==='load'){base.trigger=1;base.load=time<.7?0:time<1.7?.8:0;if(time>=2.3)base.trigger=0;}if(name==='reverse'){base.trigger=time<2.3?.7:0;base.direction=time<1?1:-1;}return base;}
 let guide=null;
-async function tick(own){if(!running||own!==epoch)return;const begun=performance.now();try{if(live){if(guide)setControls(applyPreset(guide,(rows.at(-1)?.t||0)-startTime));pending=request({session,controls:controls()});const r=await pending;if(own!==epoch)return;show(r);if(guide&&r.t-startTime>=3){guide=null;pause();return;}if(r.t-startTime>=60){pause();$('explanation').textContent='Paused after 60 seconds. Start again to continue, or reset the tool.';return;}}else{const recording=window.MECHANICA_SCENES[preset];if(playIndex>=recording.length){pause();return;}const r=recording[playIndex++];setControls(r.controls);show(r);}if(running&&own===epoch)timer=setTimeout(()=>tick(own),Math.max(0,100-(performance.now()-begun)));}catch(e){pause();error(e.message);}}
+async function tick(own){if(!running||own!==epoch)return;const begun=performance.now();try{if(live){if(guide)setControls(applyPreset(guide,(rows.at(-1)?.t||0)-startTime));pending=request({session,controls:controls()});const r=await pending;if(own!==epoch)return;show(r);if(guide&&r.t-startTime>=3){guide=null;pause();return;}if(r.t-startTime>=60){pause();$('explanation').textContent='Paused after 60 seconds. Start again to continue, or reset the tool.';return;}}else{const recording=window.MECHANICA_SCENES[preset];if(playIndex>=recording.length){pause();return;}const r=recording[playIndex++];setControls(r.controls);show(r);}if(running&&own===epoch)timer=setTimeout(()=>tick(own),Math.max(0,100-(performance.now()-begun)));}catch(e){if(e.status===429&&running&&own===epoch){$('explanation').textContent='Simulator is busy. Waiting for a free slot…';timer=setTimeout(()=>tick(own),500);return;}pause();error(e.message);}}
 function start(){if(running){pause();return;}running=true;$('error').hidden=true;startTime=rows.at(-1)?.t||0;if(!live){playIndex=0;rows=[];}$('run').textContent='PAUSE SIMULATION';const own=++epoch;tick(own);}
 async function reset(){pause();guide=null;$('run').disabled=true;try{await pending.catch(()=>{});rows=[];if(live){const r=await request({session,reset:true});setControls({trigger:.7,load:0,direction:1,gear:2,clutch:true});show(r);}else{playIndex=0;show(window.MECHANICA_SCENES[preset][0]);}$('error').hidden=true;}catch(e){error(e.message);}finally{$('run').disabled=false;}}
 async function guided(name){await reset();preset=name;guide=live?name:null;start();}
@@ -29,7 +32,43 @@ async function init(){
  document.querySelector('.trace').addEventListener('toggle',drawSpeed);$('probe-details').addEventListener('toggle',forecast);
  for(const id of ['before','after'])$(id).addEventListener('click',()=>{stage=id;for(const other of ['before','after']){$(other).classList.toggle('selected',other===id);$(other).setAttribute('aria-pressed',String(other===id));}forecast();});
  window.addEventListener('resize',()=>{drawSpeed();forecast();});document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
+ $('live-access').addEventListener('submit',async event=>{
+  event.preventDefault();$('connect-live').disabled=true;accessCode=$('access-code').value.trim();
+  try{
+   const result=await request({});live=true;session=result.session;rows=[];show(result);
+   $('live-access').hidden=true;$('access-code').value='';$('error').hidden=true;
+   for(const id of ['trigger','load','direction','gear','clutch','release','reset','run'])$(id).disabled=false;document.querySelectorAll('[data-preset]').forEach(b=>b.disabled=false);
+   $('run').textContent='START SIMULATION';$('mode').textContent='LIVE / SERVER SIMULATION';
+   $('connection-note').textContent='Connected. Start the simulation and change the controls while it runs.';
+  }catch(e){accessCode='';error(e.message);}finally{$('connect-live').disabled=false;}
+ });
  labels();
- try{if(location.protocol!=='file:'){const response=await fetch('api/status');if(response.ok){const status=await response.json();if(status.version!==2)throw Error('This is the old server. Stop it with Ctrl+C, restart launch.sh, then refresh this page.');live=status.mode==='server-simulator'&&status.scene;}}if(live){$('mode').textContent='LIVE / SERVER SIMULATION';$('connection-note').textContent='Scene and physics run on the server. Controls remain available while running.';await reset();}else{if(!window.MECHANICA_SCENES)throw Error('Scene recordings could not load. Refresh the page.');$('mode').textContent='OFFLINE / RECORDED SCENES';$('connection-note').textContent='Offline preview. Use the three guided scenes below. Start launch.sh for live control.';$('preset-note').textContent='Recorded simulator sequences';for(const id of ['trigger','load','direction','gear','clutch','release'])$(id).disabled=true;show(window.MECHANICA_SCENES.spin[0]);$('run').textContent='REPLAY SCENE';}$('run').disabled=false;}catch(e){error(e.message);$('mode').textContent='CONNECTION NEEDS ATTENTION';$('connection-note').textContent='Restart the server and refresh. The message above explains the failure.';}
+ try{
+  if(apiBase&&!/^https:\/\/[^/]+$/.test(apiBase))throw Error('The configured simulator endpoint must be an HTTPS origin.');
+  if(location.protocol!=='file:'||apiBase){
+   const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),8000);
+   let response;try{response=await fetch(apiPath('api/status'),{signal:abort.signal,credentials:'omit'});}finally{clearTimeout(timeout);}
+   if(response.ok){
+    const status=await response.json();
+    if(![2,3].includes(status.version))throw Error('This is an old server. Restart launch.sh and refresh.');
+    if(status.requiresAccessCode){
+     $('mode').textContent='LIVE SIMULATOR / ACCESS CODE REQUIRED';
+     $('connection-note').textContent='The live simulator is online. Enter your demo access code to operate it.';
+     $('live-access').hidden=false;for(const id of ['trigger','load','direction','gear','clutch','release','reset','run'])$(id).disabled=true;document.querySelectorAll('[data-preset]').forEach(b=>b.disabled=true);
+     if(window.MECHANICA_SCENES)show(window.MECHANICA_SCENES.spin[0]);
+     return;
+    }
+    live=status.mode==='server-simulator'&&status.scene;
+   }else if(apiBase)throw Error('The live simulator endpoint is unavailable. Check the running tunnel.');
+  }
+  if(live){$('mode').textContent='LIVE / SERVER SIMULATION';$('connection-note').textContent='Scene and physics run on the server. Controls remain available while running.';await reset();}
+  else{
+   if(!window.MECHANICA_SCENES)throw Error('Scene recordings could not load. Refresh the page.');
+   $('mode').textContent='OFFLINE / RECORDED SCENES';$('connection-note').textContent='Recorded preview. Live control will be available when the simulator service is connected.';$('preset-note').textContent='Recorded simulator sequences';
+   for(const id of ['trigger','load','direction','gear','clutch','release'])$(id).disabled=true;
+   show(window.MECHANICA_SCENES.spin[0]);$('run').textContent='REPLAY SCENE';
+  }
+  $('run').disabled=false;
+ }catch(e){error(e.name==='AbortError'?'Connection timed out. The simulator service may be offline.':e.message);$('mode').textContent='CONNECTION NEEDS ATTENTION';$('connection-note').textContent='The simulator could not be reached. Videos and the rest of the site remain available.';}
 }
 init();
