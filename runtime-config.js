@@ -1,1 +1,1 @@
-window.MECHANICA_CONFIG = {"apiBase": "https://binary-upload-tender-trucks.trycloudflare.com"};
+window.MECHANICA_CONFIG = {"apiBase": "https://badge-tray-frozen-electrical.trycloudflare.com"};
