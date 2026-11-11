@@ -82,3 +82,24 @@ body{background-image:radial-gradient(ellipse at 85% 0%,#12314150,transparent 38
  .expand,.probe-content h3{font-size:14px}
  .immersive .visual{max-width:none}
 }
+
+/* Opening section only. Let the headline use the available desktop width. */
+.hero-copy{min-width:0}
+.hero-pitch{max-width:48ch;text-wrap:pretty}
+@media(min-width:1000px){
+ .hero-interactive{grid-template-columns:minmax(0,1fr) clamp(280px,28vw,440px);gap:clamp(28px,4vw,88px);min-height:440px;padding:42px 0 70px}
+ .hero-interactive h1{font-size:clamp(40px,4.2vw,70px);white-space:nowrap;letter-spacing:-1.8px}
+ .hero-pitch{max-width:48ch;margin:24px 0 28px;font-size:20px}
+ .hero-instrument{width:100%;height:340px}
+ .hero-links{gap:24px}
+}
+@media(min-width:651px) and (max-width:999px){
+ .hero-interactive{grid-template-columns:minmax(0,1fr) 240px;gap:20px}
+ .hero-interactive h1{font-size:clamp(30px,4.2vw,42px);letter-spacing:-1px;white-space:nowrap}
+ .hero-instrument{height:300px;transform:scale(.7)}
+ .hero-pitch{font-size:17px}
+}
+@media(max-width:650px){
+ .hero-interactive h1{white-space:normal;text-wrap:balance;font-size:clamp(32px,7.5vw,42px)}
+ .hero-pitch{max-width:42ch}
+}
